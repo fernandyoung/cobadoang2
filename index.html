@@ -63,7 +63,7 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--acc)}
 <input id="typed" placeholder="Atau ketik kode dari perangkat lain" autocapitalize="characters" autocomplete="off">
 <button id="typedgo" style="flex:0 0 auto">Sambung</button>
 </div>
-<button class="d" id="close">Putus</button><button class="o" id="ping">Uji kecepatan (ping)</button>
+<button class="d" id="close">Putus</button><button class="o" id="ping">Uji kecepatan (ping)</button><button class="o" id="relaytest">Uji relay</button><button class="o" id="copylog">Salin log</button>
 <details><summary>Opsi jaringan</summary>
 <label class="t"><input type="checkbox" id="stun" checked style="width:auto"> Pakai STUN publik (diperlukan untuk beda jaringan; matikan untuk uji di WiFi yang sama)</label>
 <p class="t">Relay (hanya untuk menyambung):</p>
@@ -276,6 +276,8 @@ let pc=null,dc=null;
 function mkPC(){
   if(pc)try{pc.close()}catch(e){}
   pc=new RTCPeerConnection({iceServers:$("stun").checked?[{urls:"stun:stun.l.google.com:19302"}]:[]});
+  const cnt={};
+  pc.onicecandidate=e=>{if(e.candidate){const m=/ typ (\w+)/.exec(e.candidate.candidate);const t=m?m[1]:"?";cnt[t]=(cnt[t]||0)+1}else log("kandidat jaringan: "+(Object.entries(cnt).map(([k,v])=>k+" "+v).join(", ")||"tidak ada")+(cnt.srflx?"":" (tidak ada srflx: STUN tidak menjawab atau dimatikan)"))};
   pc.oniceconnectionstatechange=()=>{
     log("ICE: "+pc.iceConnectionState);
     if(pc.iceConnectionState==="failed")setSt("gagal tersambung (jaringan memblokir koneksi langsung?)","no");
@@ -408,6 +410,18 @@ $("typedgo").onclick=()=>joinWith($("typed").value);
 $("typed").onkeydown=e=>{if(e.key==="Enter")joinWith($("typed").value)};
 $("close").onclick=()=>{endSession();try{pc&&pc.close()}catch(e){}pc=dc=null;setSt("belum terhubung");$("route").hidden=true;$("qrbox").hidden=true;log("Diputus")};
 $("ping").onclick=()=>{if(dc&&dc.readyState==="open")dc.send(JSON.stringify({k:"ping",t:performance.now()}));else log("Belum terhubung")};
+
+$("copylog").onclick=async()=>{try{await navigator.clipboard.writeText(logEl.textContent);log("Log disalin")}catch(e){const r=document.createRange();r.selectNodeContents(logEl);const s=getSelection();s.removeAllRanges();s.addRange(r);log("Pilih lalu salin manual")}};
+$("relaytest").onclick=async()=>{
+  const relay=($("relay").value.trim().replace(/\/+$/,""))||"https://ntfy.sh",topic="sttest"+uid()+uid();
+  try{
+    const t0=performance.now();
+    const r=await fetch(relay+"/"+topic,{method:"POST",body:"tes"});log("relay POST: "+r.status+" ("+(performance.now()-t0).toFixed(0)+" ms)");
+    const g=await fetch(relay+"/"+topic+"/json?poll=1&since=all");const tx=await g.text();log("relay GET: "+g.status+", pesan terbaca: "+(tx.includes("tes")?"ya":"tidak"));
+    await new Promise(res=>{const es=new EventSource(relay+"/"+topic+"/sse?since=all");const to=setTimeout(()=>{es.close();log("relay SSE: tidak ada pesan dalam 5 detik");res()},5000);
+      es.onmessage=()=>{clearTimeout(to);es.close();log("relay SSE: ok");res()};es.onerror=()=>log("relay SSE: error (akan mencoba lagi)")});
+  }catch(e){log("relay GAGAL: "+e.message+" (diblokir jaringan, ekstensi, atau CORS)")}
+};
 
 /* ---------- Pindai QR ---------- */
 let scanning=false,stream=null;
