@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="theme-color" content="#111827" />
+  <link rel="manifest" href="./manifest.webmanifest" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+  <meta name="apple-mobile-web-app-title" content="Tracker Sync" />
+  <link rel="apple-touch-icon" href="./icon-192.png" />
+  <title>PWA Tracker P2P Sync Demo</title>
+  <style>
+    body{font:16px system-ui;max-width:760px;margin:32px auto;padding:0 16px;background:#f8fafc;color:#0f172a}section{background:white;border:1px solid #e2e8f0;border-radius:14px;padding:18px;margin:14px 0}button{padding:10px 14px;border:0;border-radius:8px;background:#1d4ed8;color:white;cursor:pointer;margin:4px}button.secondary{background:#475569}textarea,input{width:100%;box-sizing:border-box;padding:10px;border:1px solid #cbd5e1;border-radius:8px;margin:6px 0}video{width:100%;max-height:320px;background:#111;border-radius:10px}#qr{max-width:100%;height:auto}pre{white-space:pre-wrap;overflow-wrap:anywhere;background:#f1f5f9;padding:12px;border-radius:8px}.muted{color:#64748b;font-size:14px}.row{display:flex;gap:8px;flex-wrap:wrap}.row>*{flex:1}
+  </style>
+</head>
+<body>
+  <h1>PWA Tracker — P2P Sync</h1>
+  <p class="muted">Demo PWA offline tanpa backend. Data disimpan di LocalStorage browser ini.</p>
+  <section id="installHelp">
+    <h2>Install aplikasi</h2>
+    <p class="muted">Android/desktop: gunakan menu browser <b>Install app</b> atau <b>Add to Home Screen</b>. iPhone/iPad: Safari → Share → <b>Add to Home Screen</b>.</p>
+    <button id="installApp" hidden>Install App</button>
+    <p id="installStatus" class="muted">Buka melalui URL HTTPS GitHub Pages untuk memasang aplikasi.</p>
+  </section>
+  <section>
+    <h2>Data tracker contoh</h2>
+    <input id="title" placeholder="Nama aktivitas" />
+    <textarea id="description" placeholder="Catatan"></textarea>
+    <div class="row"><button id="add">Tambah record</button><button class="secondary" id="refresh">Refresh data</button></div>
+    <pre id="records"></pre>
+  </section>
+  <section>
+    <h2>Pairing perangkat</h2>
+    <p class="muted">Perangkat A: buat offer, pindai QR Answer dari perangkat B. Perangkat B: pindai QR Offer dari perangkat A, lalu tampilkan QR Answer.</p>
+    <div class="row"><button id="create">Create Pairing (Offer)</button><button class="secondary" id="scan">Scan QR</button></div>
+    <canvas id="qr"></canvas>
+    <video id="video" hidden playsinline></video>
+    <textarea id="payload" rows="4" placeholder="Payload Offer/Answer akan tampil di sini. Bisa juga copy-paste manual."></textarea>
+    <div class="row"><button id="acceptOffer">Accept Offer → Create Answer</button><button id="acceptAnswer">Accept Answer</button></div>
+    <button class="secondary" id="stopScan">Stop Scanner</button>
+    <p id="status" class="muted">Belum terhubung. Jika tombol tidak merespons, refresh aplikasi setelah deployment selesai.</p>
+    <p class="muted">Build fix: GitHub Pages relative module path enabled.</p>
+  </section>
+  <section>
+    <h2>Sinkronisasi</h2>
+    <button id="sync">Sync Now</button>
+    <p class="muted">Saat DataChannel terbuka, tombol ini bertukar seluruh operation log. Cocok untuk tracker teks skala kecil.</p>
+    <pre id="log"></pre>
+  </section>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
