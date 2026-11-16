@@ -68,6 +68,10 @@ details{margin-top:10px}summary{cursor:pointer;color:var(--acc)}
 <label class="t"><input type="checkbox" id="stun" checked style="width:auto"> Pakai STUN publik (diperlukan untuk beda jaringan; matikan untuk uji di WiFi yang sama)</label>
 <p class="t">Relay (hanya untuk menyambung):</p>
 <input id="relay" value="https://ntfy.sh">
+<p class="t">TURN (opsional, untuk jaringan yang memblokir sambungan langsung). Isi di kedua perangkat. Alamat boleh lebih dari satu, pisahkan koma:</p>
+<input id="turnUrl" placeholder="turn:alamat-server:80, turns:alamat-server:443" autocomplete="off">
+<div class="row"><input id="turnUser" placeholder="username" autocomplete="off"><input id="turnPass" placeholder="password" autocomplete="off"></div>
+<label class="t"><input type="checkbox" id="forceRelay" style="width:auto"> Paksa lewat TURN (untuk menguji bahwa TURN bekerja)</label>
 </details>
 <details><summary>Cadangan: sambung manual tanpa relay (salin-tempel)</summary>
 <p class="s">Dipakai jika relay tidak bisa dijangkau. Kode jawaban perlu dikirim bolak-balik.</p>
@@ -275,13 +279,17 @@ $("seed").onclick=()=>{
 let pc=null,dc=null;
 function mkPC(){
   if(pc)try{pc.close()}catch(e){}
-  pc=new RTCPeerConnection({iceServers:$("stun").checked?[{urls:"stun:stun.l.google.com:19302"}]:[]});
+  const ice=$("stun").checked?[{urls:"stun:stun.l.google.com:19302"}]:[];
+  const tu=$("turnUrl").value.split(",").map(x=>x.trim()).filter(Boolean);
+  if(tu.length){ice.push({urls:tu,username:$("turnUser").value.trim(),credential:$("turnPass").value.trim()});try{localStorage.setItem("synctest.turn",JSON.stringify([$("turnUrl").value,$("turnUser").value,$("turnPass").value]))}catch(e){}}
+  const cfg={iceServers:ice};if($("forceRelay").checked){cfg.iceTransportPolicy="relay";log("Mode paksa TURN")}
+  pc=new RTCPeerConnection(cfg);
   const cnt={};
   pc.onicecandidate=e=>{if(e.candidate){const m=/ typ (\w+)/.exec(e.candidate.candidate);const t=m?m[1]:"?";cnt[t]=(cnt[t]||0)+1}else log("kandidat jaringan: "+(Object.entries(cnt).map(([k,v])=>k+" "+v).join(", ")||"tidak ada")+(cnt.srflx?"":" (tidak ada srflx: STUN tidak menjawab atau dimatikan)"))};
   pc.oniceconnectionstatechange=()=>{
     log("ICE: "+pc.iceConnectionState);
     if(pc.iceConnectionState==="failed")setSt("gagal tersambung (jaringan memblokir koneksi langsung?)","no");
-    if(pc.iceConnectionState==="disconnected")setSt("terputus","no");
+    if(pc.iceConnectionState==="disconnected")setSt("terputus (sambungan langsung tidak terbentuk; coba TURN)","no");
   };
   return pc;
 }
@@ -524,6 +532,7 @@ $("self").onclick=async()=>{
   if(navigator.storage&&navigator.storage.persisted)T("penyimpanan persisten: "+(await navigator.storage.persisted()?"ya":"belum"),true);
 };
 
+try{const t=JSON.parse(localStorage.getItem("synctest.turn"));if(t){$("turnUrl").value=t[0];$("turnUser").value=t[1];$("turnPass").value=t[2]}}catch(e){}
 render();
 log("Siap. ID perangkat "+S.dev);
 // Dibuka dari QR (kamera HP): #p=KODE
