@@ -1,8 +1,8 @@
-# PWA Tracker — P2P Sync (GitHub Pages)
+# PWA Tracker — P2P Sync (GitHub Pages) — Fixed
 
 Demo PWA tracker teks dengan LocalStorage, WebRTC DataChannel, QR pairing, dan Smart Merge sederhana. Tidak menggunakan backend, database cloud, atau signaling server.
 
-## Deploy ke GitHub Pages
+## Perbaikan penting\n\nEntry JavaScript menggunakan path relatif `./src/main.js`, bukan `/src/main.js`. Ini wajib untuk repository GitHub Pages yang di-host pada subpath `/NAMA-REPOSITORY/`.\n\n## Deploy ke GitHub Pages
 
 1. Buat repository GitHub baru.
 2. Upload seluruh isi folder proyek ini ke root repository (pastikan `package.json`, `index.html`, `vite.config.js`, `src/`, `public/`, dan `.github/` berada di root).

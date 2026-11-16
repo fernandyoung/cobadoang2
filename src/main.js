@@ -22,7 +22,10 @@ function log(message) {
   const el = $("log");
   el.textContent = `${new Date().toLocaleTimeString()} — ${message}\n${el.textContent}`.slice(0, 5000);
 }
-function status(message) { $("status").textContent = message; }
+function status(message) {
+  $("status").textContent = message;
+  log(message);
+}
 function render() {
   $("records").textContent = JSON.stringify({ deviceId: getDeviceId(), ...getDebugState(), records: getRecords() }, null, 2);
 }
@@ -36,7 +39,19 @@ function newSession() {
 }
 async function showQr(payload) {
   $("payload").value = payload;
-  await QRCode.toCanvas($("qr"), payload, { errorCorrectionLevel: "L", margin: 1, width: 420 });
+  const canvas = $("qr");
+  try {
+    await QRCode.toCanvas(canvas, payload, {
+      errorCorrectionLevel: "L",
+      margin: 2,
+      width: 560,
+      color: { dark: "#111827", light: "#ffffff" }
+    });
+    canvas.hidden = false;
+  } catch (error) {
+    canvas.hidden = true;
+    throw new Error(`Gagal membuat QR (${error.message}). Gunakan salin-tempel payload di kotak teks.`);
+  }
 }
 
 $("add").onclick = () => {

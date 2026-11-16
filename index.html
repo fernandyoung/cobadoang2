@@ -4,6 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#111827" />
+  <link rel="manifest" href="./manifest.webmanifest" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="default" />
   <meta name="apple-mobile-web-app-title" content="Tracker Sync" />
@@ -38,7 +39,8 @@
     <textarea id="payload" rows="4" placeholder="Payload Offer/Answer akan tampil di sini. Bisa juga copy-paste manual."></textarea>
     <div class="row"><button id="acceptOffer">Accept Offer → Create Answer</button><button id="acceptAnswer">Accept Answer</button></div>
     <button class="secondary" id="stopScan">Stop Scanner</button>
-    <p id="status" class="muted">Belum terhubung.</p>
+    <p id="status" class="muted">Belum terhubung. Jika tombol tidak merespons, refresh aplikasi setelah deployment selesai.</p>
+    <p class="muted">Build fix: GitHub Pages relative module path enabled.</p>
   </section>
   <section>
     <h2>Sinkronisasi</h2>
@@ -46,6 +48,6 @@
     <p class="muted">Saat DataChannel terbuka, tombol ini bertukar seluruh operation log. Cocok untuk tracker teks skala kecil.</p>
     <pre id="log"></pre>
   </section>
-  <script type="module" src="/src/main.js"></script>
+  <script type="module" src="./src/main.js"></script>
 </body>
 </html>
