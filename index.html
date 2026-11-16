@@ -1,0 +1,521 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Uji Sinkron Tanpa Akun (QR + relay)</title>
+<style>
+:root{--bg:#faf8f4;--fg:#26231f;--mut:#756f66;--line:#e2ddd3;--acc:#2f6b57;--bad:#a8402f;--card:#fff}
+*{box-sizing:border-box}
+body{margin:0;font:16px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--fg);padding:16px;max-width:720px;margin-inline:auto}
+h1{font-size:1.3rem;margin:0 0 4px}h2{font-size:1.05rem;margin:0 0 8px}
+p.s{color:var(--mut);margin:0 0 12px;font-size:.9rem}
+section{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:14px;margin-bottom:14px}
+button{font:inherit;padding:8px 12px;border-radius:8px;border:1px solid var(--acc);background:var(--acc);color:#fff;cursor:pointer;margin:2px 4px 2px 0}
+button.o{background:#fff;color:var(--acc)}button.d{background:#fff;color:var(--bad);border-color:var(--bad)}
+input,textarea{font:inherit;padding:8px;border:1px solid var(--line);border-radius:8px;width:100%;margin:3px 0;background:#fff;color:var(--fg)}
+textarea{height:80px;font:12px/1.3 ui-monospace,monospace;word-break:break-all}
+.row{display:flex;gap:6px;flex-wrap:wrap}.row>*{flex:1 1 120px}
+.badge{display:inline-block;padding:2px 10px;border-radius:99px;font-size:.85rem;border:1px solid var(--line)}
+.ok{color:var(--acc);border-color:var(--acc)}.no{color:var(--bad);border-color:var(--bad)}
+.code{font:700 1.4rem ui-monospace,monospace;letter-spacing:.08em;text-align:center;padding:8px;background:var(--bg);border-radius:8px}
+#qr{display:block;margin:8px auto;max-width:100%;image-rendering:pixelated;border:1px solid var(--line)}
+video{width:100%;max-height:300px;background:#000;border-radius:8px}
+ul{list-style:none;padding:0;margin:0}
+li.b{display:flex;justify-content:space-between;gap:8px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}
+li.b small{color:var(--mut)}
+#log{font:12px/1.4 ui-monospace,monospace;max-height:240px;overflow:auto;background:#1f1d1a;color:#d8d3c8;padding:8px;border-radius:8px;white-space:pre-wrap}
+.t{font-size:.9rem}.t li{padding:2px 0}
+details{margin-top:10px}summary{cursor:pointer;color:var(--acc)}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<h1>Uji sinkron tanpa akun</h1>
+<p class="s">Pindai satu QR, dua perangkat tersambung langsung dan datanya digabung. Relay hanya dipakai beberapa detik untuk menyambung dan hanya melihat data terenkripsi. Ini alat uji, bukan app jadi.</p>
+
+<section>
+<h2>1. Perpustakaan uji (disimpan di perangkat ini)</h2>
+<div class="row"><input id="ti" placeholder="Judul buku"><input id="pr" type="number" min="0" max="100" placeholder="Progres %"></div>
+<button id="add">Tambah / perbarui</button><button class="o" id="seed">Isi 3 buku contoh</button>
+<ul id="list"></ul>
+<p class="s" id="meta"></p>
+</section>
+
+<section>
+<h2>2. Pasangkan perangkat</h2>
+<p>Status: <span class="badge" id="st">belum terhubung</span> <span class="badge" id="route" hidden></span></p>
+<div class="row">
+<button id="host">Tampilkan QR di perangkat ini</button>
+<button class="o" id="scanbtn">Pindai QR dari perangkat lain</button>
+</div>
+<div id="qrbox" hidden>
+<canvas id="qr"></canvas>
+<p class="s" style="text-align:center">Pindai dengan kamera perangkat kedua, atau ketik kode ini di sana:</p>
+<div class="code" id="codeTxt"></div>
+<p class="s" id="urlTxt" style="word-break:break-all"></p>
+</div>
+<div id="scanbox" hidden>
+<video id="vid" playsinline muted></video>
+<button class="d" id="scanstop">Tutup kamera</button>
+</div>
+<div class="row" style="margin-top:8px">
+<input id="typed" placeholder="Atau ketik kode dari perangkat lain" autocapitalize="characters" autocomplete="off">
+<button id="typedgo" style="flex:0 0 auto">Sambung</button>
+</div>
+<button class="d" id="close">Putus</button><button class="o" id="ping">Uji kecepatan (ping)</button>
+<details><summary>Opsi jaringan</summary>
+<label class="t"><input type="checkbox" id="stun" checked style="width:auto"> Pakai STUN publik (diperlukan untuk beda jaringan; matikan untuk uji di WiFi yang sama)</label>
+<p class="t">Relay (hanya untuk menyambung):</p>
+<input id="relay" value="https://ntfy.sh">
+</details>
+<details><summary>Cadangan: sambung manual tanpa relay (salin-tempel)</summary>
+<p class="s">Dipakai jika relay tidak bisa dijangkau. Kode jawaban perlu dikirim bolak-balik.</p>
+<button id="mk">A1. Buat kode undangan</button>
+<textarea id="offer" readonly placeholder="Kode undangan"></textarea>
+<button class="o" data-copy="offer">Salin</button>
+<p class="t">A2. Tempel jawaban dari B:</p><textarea id="ansIn"></textarea><button id="fin">A3. Sambungkan</button>
+<hr style="border:0;border-top:1px solid var(--line)">
+<p class="t">B1. Tempel undangan dari A:</p><textarea id="offIn"></textarea><button id="join">B2. Buat kode jawaban</button>
+<textarea id="answer" readonly></textarea><button class="o" data-copy="answer">Salin</button>
+<p class="t">Kode pencocokan (harus sama di A dan B):</p><div class="code" id="sas">------</div>
+</details>
+</section>
+
+<section>
+<h2>3. Cadangan: gabung lewat berkas (tahap 1)</h2>
+<button class="o" id="exp">Ekspor berkas</button>
+<input type="file" id="imp" accept=".json,application/json">
+</section>
+
+<section>
+<h2>4. Uji otomatis</h2>
+<button class="o" id="self">Jalankan</button>
+<ul class="t" id="selfOut"></ul>
+</section>
+
+<section>
+<h2>Skenario yang perlu dicoba</h2>
+<ul class="t">
+<li>☐ HP dan laptop di WiFi yang sama (STUN mati).</li>
+<li>☐ HP di data seluler, laptop di WiFi (STUN nyala): apakah rutenya "langsung"? berapa lama?</li>
+<li>☐ iPhone Safari memindai QR dari laptop (butuh pustaka pindai atau kamera bawaan).</li>
+<li>☐ Ubah buku yang sama di dua sisi saat putus, sambungkan lagi: yang terbaru menang.</li>
+<li>☐ Hapus di A, ubah di B: lihat log.</li>
+<li>☐ Matikan relay (isi alamat salah): apakah pesan galatnya jelas?</li>
+<li>☐ Berapa detik dari "tampilkan QR" sampai data sinkron?</li>
+</ul>
+</section>
+
+<section><h2>Log</h2><div id="log"></div></section>
+
+<script>
+
+const L=(()=>{
+const enc=new TextEncoder(),dec=new TextDecoder();
+/* ===== Pembuat QR (byte mode, level L, versi 1-6, tanpa pustaka) ===== */
+const P=[null,[19,7,1],[34,10,1],[55,15,1],[80,20,1],[108,26,1],[136,18,2]];
+const EXP=new Array(512),LOG=new Array(256);
+(()=>{let x=1;for(let i=0;i<255;i++){EXP[i]=x;LOG[x]=i;x<<=1;if(x&256)x^=0x11D}for(let i=255;i<512;i++)EXP[i]=EXP[i-255]})();
+const mul=(a,b)=>a&&b?EXP[LOG[a]+LOG[b]]:0;
+function qr(text){
+  const data=[...enc.encode(text)];
+  let ver=0;for(let v=1;v<=6;v++)if(data.length<=P[v][0]-2){ver=v;break}
+  if(!ver)return null;
+  const [dtot,ecn,nb]=P[ver],size=17+4*ver;
+  const bits=[],push=(v,n)=>{for(let i=n-1;i>=0;i--)bits.push((v>>>i)&1)};
+  push(4,4);push(data.length,8);data.forEach(b=>push(b,8));
+  push(0,Math.min(4,dtot*8-bits.length));
+  while(bits.length%8)bits.push(0);
+  const cw=[];for(let i=0;i<bits.length;i+=8){let b=0;for(let j=0;j<8;j++)b=b<<1|bits[i+j];cw.push(b)}
+  for(let pad=0xEC;cw.length<dtot;pad^=0xFD)cw.push(pad);
+  let g=[1];for(let i=0;i<ecn;i++){const ng=new Array(g.length+1).fill(0);for(let j=0;j<g.length;j++){ng[j]^=g[j];ng[j+1]^=mul(g[j],EXP[i])}g=ng}
+  const rs=d=>{const r=new Array(ecn).fill(0);for(const b of d){const f=b^r.shift();r.push(0);for(let i=0;i<ecn;i++)r[i]^=mul(g[i+1],f)}return r};
+  const bl=dtot/nb,blocks=[],ecs=[];
+  for(let i=0;i<nb;i++){const d=cw.slice(i*bl,(i+1)*bl);blocks.push(d);ecs.push(rs(d))}
+  const all=[];
+  for(let i=0;i<bl;i++)for(const b of blocks)all.push(b[i]);
+  for(let i=0;i<ecn;i++)for(const e of ecs)all.push(e[i]);
+  const m=Array.from({length:size},()=>new Array(size).fill(false));
+  const fn=Array.from({length:size},()=>new Array(size).fill(false));
+  const set=(x,y,d)=>{m[y][x]=d;fn[y][x]=true};
+  for(let i=0;i<size;i++){set(6,i,i%2===0);set(i,6,i%2===0)}
+  for(const [cx,cy] of [[3,3],[size-4,3],[3,size-4]])
+    for(let dy=-4;dy<=4;dy++)for(let dx=-4;dx<=4;dx++){
+      const x=cx+dx,y=cy+dy;if(x<0||y<0||x>=size||y>=size)continue;
+      const d=Math.max(Math.abs(dx),Math.abs(dy));set(x,y,d!==2&&d!==4)}
+  if(ver>=2){const c=size-7;for(let dy=-2;dy<=2;dy++)for(let dx=-2;dx<=2;dx++)set(c+dx,c+dy,Math.max(Math.abs(dx),Math.abs(dy))!==1)}
+  const drawFormat=mask=>{
+    const d=(1<<3)|mask;let r=d;for(let i=0;i<10;i++)r=(r<<1)^((r>>>9)*0x537);
+    const bs=((d<<10)|r)^0x5412,bit=i=>((bs>>>i)&1)!==0;
+    for(let i=0;i<=5;i++)set(8,i,bit(i));set(8,7,bit(6));set(8,8,bit(7));set(7,8,bit(8));
+    for(let i=9;i<15;i++)set(14-i,8,bit(i));
+    for(let i=0;i<8;i++)set(size-1-i,8,bit(i));
+    for(let i=8;i<15;i++)set(8,size-15+i,bit(i));
+    set(8,size-8,true);
+  };
+  drawFormat(0);
+  let k=0;
+  for(let right=size-1;right>=1;right-=2){
+    if(right===6)right=5;
+    for(let vert=0;vert<size;vert++)for(let j=0;j<2;j++){
+      const x=right-j,up=((right+1)&2)===0,y=up?size-1-vert:vert;
+      if(!fn[y][x]&&k<all.length*8){m[y][x]=((all[k>>>3]>>>(7-(k&7)))&1)!==0;k++}
+    }
+  }
+  const MK=[(x,y)=>(x+y)%2===0,(x,y)=>y%2===0,(x,y)=>x%3===0,(x,y)=>(x+y)%3===0,
+    (x,y)=>(Math.floor(x/3)+Math.floor(y/2))%2===0,(x,y)=>x*y%2+x*y%3===0,
+    (x,y)=>(x*y%2+x*y%3)%2===0,(x,y)=>((x+y)%2+x*y%3)%2===0];
+  const pen=mm=>{
+    let p=0;
+    for(let t=0;t<2;t++)for(let a=0;a<size;a++){let run=1;for(let b=1;b<size;b++){
+      const c=t?mm[b][a]:mm[a][b],pv=t?mm[b-1][a]:mm[a][b-1];
+      if(c===pv){run++;if(run===5)p+=3;else if(run>5)p++}else run=1}}
+    for(let y=0;y<size-1;y++)for(let x=0;x<size-1;x++){const c=mm[y][x];if(c===mm[y][x+1]&&c===mm[y+1][x]&&c===mm[y+1][x+1])p+=3}
+    const A=[1,0,1,1,1,0,1,0,0,0,0],B=[0,0,0,0,1,0,1,1,1,0,1];
+    for(let t=0;t<2;t++)for(let a=0;a<size;a++)for(let b=0;b+11<=size;b++){
+      let ma=true,mb=true;for(let i=0;i<11;i++){const c=(t?mm[b+i][a]:mm[a][b+i])?1:0;if(c!==A[i])ma=false;if(c!==B[i])mb=false}
+      if(ma)p+=40;if(mb)p+=40}
+    let dark=0;for(const r of mm)for(const c of r)if(c)dark++;
+    const tot=size*size;p+=(Math.ceil(Math.abs(dark*20-tot*10)/tot)-1)*10;
+    return p;
+  };
+  let best=null,bp=Infinity;
+  for(let mask=0;mask<8;mask++){
+    const base=m.map(r=>r.slice());
+    for(let y=0;y<size;y++)for(let x=0;x<size;x++)if(!fn[y][x]&&MK[mask](x,y))m[y][x]=!m[y][x];
+    drawFormat(mask);
+    const p=pen(m);if(p<bp){bp=p;best=m.map(r=>r.slice())}
+    for(let y=0;y<size;y++)for(let x=0;x<size;x++)m[y][x]=base[y][x];
+  }
+  return best;
+}
+/* ===== Rahasia pairing, kunci, sandi ===== */
+const ALPHA="23456789ABCDEFGHJKMNPQRSTVWXYZ";
+function newSecret(){const a=new Uint8Array(32);let o="";while(o.length<16){crypto.getRandomValues(a);for(const v of a)if(v<240&&o.length<16)o+=ALPHA[v%30]}return o}
+const normSecret=s=>[...String(s).toUpperCase()].filter(c=>ALPHA.includes(c)).join("");
+const fmt=s=>s.match(/.{1,4}/g).join("-");
+const hex=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
+async function keysFor(secret){
+  const base=await crypto.subtle.importKey("raw",enc.encode(secret),"HKDF",false,["deriveBits","deriveKey"]);
+  const salt=enc.encode("synctest-v1");
+  const key=await crypto.subtle.deriveKey({name:"HKDF",hash:"SHA-256",salt,info:enc.encode("aes")},base,{name:"AES-GCM",length:256},false,["encrypt","decrypt"]);
+  const tb=await crypto.subtle.deriveBits({name:"HKDF",hash:"SHA-256",salt,info:enc.encode("topic")},base,128);
+  return {key,topic:"st"+hex(tb)};
+}
+const b64u=u=>{let s="";for(const c of u)s+=String.fromCharCode(c);return btoa(s).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/,"")};
+const unb64u=s=>{s=s.replace(/-/g,"+").replace(/_/g,"/");while(s.length%4)s+="=";const r=atob(s),u=new Uint8Array(r.length);for(let i=0;i<r.length;i++)u[i]=r.charCodeAt(i);return u};
+const pipe=async(bytes,ts)=>new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(ts)).arrayBuffer());
+async function seal(obj,key){
+  const raw=enc.encode(JSON.stringify(obj)),z=typeof CompressionStream!=="undefined";
+  const body=z?await pipe(raw,new CompressionStream("deflate-raw")):raw;
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ct=new Uint8Array(await crypto.subtle.encrypt({name:"AES-GCM",iv},key,body));
+  const out=new Uint8Array(13+ct.length);out[0]=z?1:0;out.set(iv,1);out.set(ct,13);
+  return b64u(out);
+}
+async function open(str,key){
+  const u=unb64u(str),iv=u.slice(1,13);
+  let body=new Uint8Array(await crypto.subtle.decrypt({name:"AES-GCM",iv},key,u.slice(13)));
+  if(u[0]===1)body=await pipe(body,new DecompressionStream("deflate-raw"));
+  return JSON.parse(dec.decode(body));
+}
+return {qr,newSecret,normSecret,fmt,keysFor,seal,open};
+})();
+</script>
+<script>
+(()=>{
+"use strict";
+const $=id=>document.getElementById(id);
+const KEY="synctest.v2";
+const uid=()=>Math.random().toString(36).slice(2,10);
+const enc=new TextEncoder();
+const logEl=$("log");
+function log(m){logEl.textContent+=new Date().toLocaleTimeString()+"  "+m+"\n";logEl.scrollTop=logEl.scrollHeight}
+function setSt(t,c){const e=$("st");e.textContent=t;e.className="badge "+(c||"")}
+
+/* ---------- Penyimpanan & penggabungan ---------- */
+function load(){try{const s=JSON.parse(localStorage.getItem(KEY));if(s&&s.books)return s}catch(e){}return {dev:uid(),clock:0,books:{}}}
+let S=load();
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){log("Gagal simpan: "+e.message)}}
+const tick=()=>(S.clock=Math.max(S.clock+1,Date.now()));
+const newer=(a,b)=>!b||(a.t!==b.t?a.t>b.t:a.by>b.by);
+function merge(local,remote){
+  const out={...local};let changed=false,maxT=0;
+  for(const [id,r] of Object.entries(remote||{})){maxT=Math.max(maxT,r.t);if(newer(r,out[id])){out[id]=r;changed=true}}
+  return {books:out,changed,maxT};
+}
+function render(){
+  const ul=$("list");ul.innerHTML="";
+  const items=Object.entries(S.books).filter(([,b])=>!b.del).sort((a,b)=>b[1].t-a[1].t);
+  for(const [id,b] of items){
+    const li=document.createElement("li");li.className="b";
+    const d=document.createElement("div");d.textContent=b.title;
+    const sm=document.createElement("small");sm.textContent=" · "+b.pr+"% · diubah di "+b.by.slice(0,4);d.appendChild(sm);
+    const bt=document.createElement("button");bt.className="d";bt.textContent="Hapus";
+    bt.onclick=()=>{S.books[id]={...b,del:true,t:tick(),by:S.dev};save();render();sendAll("hapus")};
+    li.append(d,bt);ul.appendChild(li);
+  }
+  if(!items.length){const li=document.createElement("li");li.className="b";li.textContent="Belum ada buku.";ul.appendChild(li)}
+  const dead=Object.values(S.books).filter(b=>b.del).length;
+  $("meta").textContent="ID perangkat: "+S.dev+" · "+items.length+" buku · "+dead+" penanda hapus";
+}
+$("add").onclick=()=>{
+  const title=$("ti").value.trim();if(!title)return;
+  const pr=Math.max(0,Math.min(100,parseInt($("pr").value||"0",10)||0));
+  let id=Object.keys(S.books).find(k=>!S.books[k].del&&S.books[k].title.toLowerCase()===title.toLowerCase())||uid();
+  S.books[id]={title,pr,t:tick(),by:S.dev};save();render();$("ti").value="";$("pr").value="";sendAll("ubah");
+};
+$("seed").onclick=()=>{
+  for(const [t,p] of [["Contoh: Dune",40],["Contoh: Piranesi",100],["Contoh: Middlemarch",12]])S.books[uid()]={title:t,pr:p,t:tick(),by:S.dev};
+  save();render();sendAll("contoh");
+};
+
+/* ---------- WebRTC ---------- */
+let pc=null,dc=null;
+function mkPC(){
+  if(pc)try{pc.close()}catch(e){}
+  pc=new RTCPeerConnection({iceServers:$("stun").checked?[{urls:"stun:stun.l.google.com:19302"}]:[]});
+  pc.oniceconnectionstatechange=()=>{
+    log("ICE: "+pc.iceConnectionState);
+    if(pc.iceConnectionState==="failed")setSt("gagal tersambung (jaringan memblokir koneksi langsung?)","no");
+    if(pc.iceConnectionState==="disconnected")setSt("terputus","no");
+  };
+  return pc;
+}
+const waitIce=p=>new Promise(res=>{
+  if(p.iceGatheringState==="complete")return res();
+  const f=()=>{if(p.iceGatheringState==="complete"){p.removeEventListener("icegatheringstatechange",f);res()}};
+  p.addEventListener("icegatheringstatechange",f);setTimeout(res,6000);
+});
+function wire(ch){
+  dc=ch;
+  ch.onopen=()=>{
+    const secs=sess&&sess.t0?((performance.now()-sess.t0)/1000).toFixed(1):null;
+    setSt("terhubung","ok");log("Saluran terbuka"+(secs?" ("+secs+" detik sejak mulai)":"")+". Mengirim data.");
+    endSession();sendAll("hello");routeInfo();
+  };
+  ch.onclose=()=>{setSt("terputus","no");log("Saluran tertutup")};
+  ch.onmessage=e=>onMsg(e.data);
+}
+function sendAll(why){
+  if(dc&&dc.readyState==="open"){dc.send(JSON.stringify({k:"snap",books:S.books}));log("kirim ("+why+"), "+Object.keys(S.books).length+" catatan")}
+}
+function onMsg(raw){
+  let m;try{m=JSON.parse(raw)}catch(e){return log("pesan rusak")}
+  if(m.k==="ping"){dc.send(JSON.stringify({k:"pong",t:m.t}));return}
+  if(m.k==="pong"){log("ping: "+(performance.now()-m.t).toFixed(0)+" ms");return}
+  if(m.k!=="snap")return;
+  const r=merge(S.books,m.books);
+  if(r.changed){
+    const n=Object.keys(m.books).filter(id=>r.books[id]===m.books[id]).length;
+    S.books=r.books;S.clock=Math.max(S.clock,r.maxT);save();render();log("terima & gabung: "+n+" catatan baru/lebih baru");
+  }else log("terima: tidak ada yang lebih baru");
+  if(merge(m.books,S.books).changed)sendAll("balasan");
+}
+async function routeInfo(){
+  try{
+    const stats=await pc.getStats();let pair,lt="?";
+    stats.forEach(s=>{if(s.type==="candidate-pair"&&s.nominated&&s.state==="succeeded")pair=s});
+    if(!pair)return;
+    stats.forEach(s=>{if(s.id===pair.localCandidateId)lt=s.candidateType});
+    const e=$("route");e.hidden=false;
+    e.textContent="rute: "+({host:"jaringan lokal",srflx:"langsung lewat internet",prflx:"langsung",relay:"relay"}[lt]||lt);log("Rute: "+lt);
+  }catch(e){}
+}
+
+/* ---------- Pairing lewat relay (ntfy), pesan terenkripsi ---------- */
+let sess=null;
+function endSession(){
+  if(!sess)return;
+  try{sess.es&&sess.es.close()}catch(e){}
+  clearTimeout(sess.timer);clearInterval(sess.hello);sess=null;
+}
+async function publish(s,sealed){
+  if(sealed.length>3900)log("Peringatan: pesan "+sealed.length+" byte, mendekati batas relay 4096");
+  const r=await fetch(s.relay+"/"+s.topic,{method:"POST",body:sealed});
+  if(!r.ok)throw new Error("relay menjawab "+r.status);
+}
+async function startSession(role,secret){
+  endSession();
+  const {key,topic}=await L.keysFor(secret);
+  const relay=($("relay").value.trim().replace(/\/+$/,""))||"https://ntfy.sh";
+  const s=sess={role,key,topic,relay,id:uid()+uid(),lastOffer:null,making:false,answered:false,gotOffer:false,t0:performance.now()};
+  s.es=new EventSource(relay+"/"+topic+"/sse?since=5m");
+  s.es.onmessage=ev=>{let d;try{d=JSON.parse(ev.data)}catch(e){return}if(d.event==="message"&&d.message)handle(s,d.message)};
+  s.es.onerror=()=>log("relay: koneksi terganggu, mencoba lagi…");
+  s.timer=setTimeout(()=>{if(sess===s){log("Waktu habis (2 menit). Coba lagi.");setSt("waktu habis","no");endSession()}},120000);
+  await new Promise(res=>{s.es.addEventListener("open",()=>{log("relay: tersambung ("+relay+")");res()},{once:true});setTimeout(res,4000)});
+  return s;
+}
+async function handle(s,msg){
+  let m;
+  try{m=await L.open(msg,s.key)}catch(e){return log("pesan relay tidak bisa dibuka (kunci tidak cocok), diabaikan")}
+  if(m.from===s.id||sess!==s)return;
+  try{
+    if(s.role==="A"&&m.t==="hello"){
+      if(s.lastOffer){await publish(s,s.lastOffer);return}
+      if(s.making)return;s.making=true;
+      setSt("perangkat kedua terdeteksi, menyiapkan sambungan…");log("hello diterima");
+      mkPC();wire(pc.createDataChannel("sync"));
+      await pc.setLocalDescription(await pc.createOffer());await waitIce(pc);
+      s.lastOffer=await L.seal({from:s.id,t:"offer",sdp:pc.localDescription.sdp},s.key);
+      await publish(s,s.lastOffer);log("undangan dikirim lewat relay");
+    }else if(s.role==="A"&&m.t==="answer"&&!s.answered){
+      s.answered=true;setSt("menyambung…");log("jawaban diterima");
+      await pc.setRemoteDescription({type:"answer",sdp:m.sdp});
+    }else if(s.role==="B"&&m.t==="offer"&&!s.gotOffer){
+      s.gotOffer=true;clearInterval(s.hello);setSt("menyambung…");log("undangan diterima");
+      mkPC();pc.ondatachannel=e=>wire(e.channel);
+      await pc.setRemoteDescription({type:"offer",sdp:m.sdp});
+      await pc.setLocalDescription(await pc.createAnswer());await waitIce(pc);
+      await publish(s,await L.seal({from:s.id,t:"answer",sdp:pc.localDescription.sdp},s.key));log("jawaban dikirim lewat relay");
+    }
+  }catch(e){log("Error: "+e.message);setSt("error","no")}
+}
+function drawQR(canvas,m,scale){
+  const q=4,n=m.length,sz=(n+2*q)*scale;canvas.width=canvas.height=sz;
+  const c=canvas.getContext("2d");c.fillStyle="#fff";c.fillRect(0,0,sz,sz);c.fillStyle="#000";
+  for(let y=0;y<n;y++)for(let x=0;x<n;x++)if(m[y][x])c.fillRect((x+q)*scale,(y+q)*scale,scale,scale);
+}
+$("host").onclick=async()=>{
+  try{
+    stopScan();setSt("menyiapkan…");$("route").hidden=true;
+    const secret=L.newSecret();
+    const base=location.href.split("#")[0];
+    let text=/^https?:/.test(base)?base+"#p="+secret:null,m=text&&L.qr(text);
+    if(!m){text="p="+secret;m=L.qr(text)}
+    drawQR($("qr"),m,8);$("codeTxt").textContent=L.fmt(secret);
+    $("urlTxt").textContent=text.startsWith("http")?"QR berisi tautan ke halaman ini, jadi kamera HP langsung membukanya.":"QR hanya berisi kode (halaman ini tidak dibuka lewat alamat web).";
+    $("qrbox").hidden=false;
+    await startSession("A",secret);
+    setSt("menunggu perangkat lain memindai…");log("Menunggu perangkat kedua");
+  }catch(e){log("Error: "+e.message);setSt("error","no")}
+};
+async function joinWith(raw){
+  try{
+    const mt=/p=([A-Za-z0-9]+)/.exec(raw||"");
+    const secret=L.normSecret(mt?mt[1]:raw);
+    if(secret.length!==16)return log("Kode tidak valid (harus 16 karakter): "+(raw||"").slice(0,40));
+    stopScan();$("qrbox").hidden=true;$("route").hidden=true;setSt("mencari perangkat pertama…");
+    const s=await startSession("B",secret);
+    const hello=await L.seal({from:s.id,t:"hello"},s.key);
+    const send=()=>publish(s,hello).catch(e=>log("hello gagal: "+e.message));
+    send();log("hello dikirim");s.hello=setInterval(()=>{if(!s.gotOffer)send()},4000);
+  }catch(e){log("Error: "+e.message);setSt("error","no")}
+}
+$("typedgo").onclick=()=>joinWith($("typed").value);
+$("typed").onkeydown=e=>{if(e.key==="Enter")joinWith($("typed").value)};
+$("close").onclick=()=>{endSession();try{pc&&pc.close()}catch(e){}pc=dc=null;setSt("belum terhubung");$("route").hidden=true;$("qrbox").hidden=true;log("Diputus")};
+$("ping").onclick=()=>{if(dc&&dc.readyState==="open")dc.send(JSON.stringify({k:"ping",t:performance.now()}));else log("Belum terhubung")};
+
+/* ---------- Pindai QR ---------- */
+let scanning=false,stream=null;
+function stopScan(){scanning=false;if(stream){stream.getTracks().forEach(t=>t.stop());stream=null}$("scanbox").hidden=true}
+$("scanstop").onclick=stopScan;
+function loadJsQR(){return new Promise((res,rej)=>{
+  if(window.jsQR)return res();
+  const s=document.createElement("script");s.src="https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.js";
+  s.onload=res;s.onerror=()=>rej(new Error("pustaka pindai tidak bisa dimuat"));document.head.appendChild(s);
+})}
+$("scanbtn").onclick=async()=>{
+  try{
+    $("qrbox").hidden=true;
+    stream=await navigator.mediaDevices.getUserMedia({video:{facingMode:"environment"}});
+    const vid=$("vid");vid.srcObject=stream;$("scanbox").hidden=false;await vid.play();
+    let det=null;if("BarcodeDetector" in window)try{det=new BarcodeDetector({formats:["qr_code"]})}catch(e){}
+    if(!det){log("Browser tanpa pemindai bawaan, memuat jsQR dari CDN (hanya untuk pindai)");await loadJsQR()}
+    const cv=document.createElement("canvas"),cx=cv.getContext("2d",{willReadFrequently:true});
+    scanning=true;
+    const loop=async()=>{
+      if(!scanning)return;
+      try{
+        let val=null;
+        if(det){const r=await det.detect(vid);if(r.length)val=r[0].rawValue}
+        else if(vid.videoWidth){cv.width=vid.videoWidth;cv.height=vid.videoHeight;cx.drawImage(vid,0,0);const im=cx.getImageData(0,0,cv.width,cv.height);const c=window.jsQR(im.data,im.width,im.height);if(c)val=c.data}
+        if(val){log("QR terbaca");joinWith(val);return}
+      }catch(e){}
+      setTimeout(loop,150);
+    };
+    loop();
+  }catch(e){stopScan();log("Kamera/pindai gagal: "+e.message+". Pakai kamera bawaan HP (QR membuka halaman ini) atau ketik kodenya.")}
+};
+
+/* ---------- Manual tanpa relay ---------- */
+let offerSdp="",answerSdp="";
+const b64e=o=>btoa(unescape(encodeURIComponent(JSON.stringify(o))));
+const b64d=s=>JSON.parse(decodeURIComponent(escape(atob(s.replace(/\s+/g,"")))));
+const fp=sdp=>{const m=/a=fingerprint:\S+ (\S+)/.exec(sdp);return m?m[1]:""};
+async function showSas(){
+  const a=fp(offerSdp),b=fp(answerSdp);if(!a||!b)return;
+  const h=await crypto.subtle.digest("SHA-256",enc.encode([a,b].sort().join("|")));
+  $("sas").textContent=String(new DataView(h).getUint32(0)%1000000).padStart(6,"0");
+}
+$("mk").onclick=async()=>{try{endSession();mkPC();wire(pc.createDataChannel("sync"));setSt("menyiapkan…");
+  await pc.setLocalDescription(await pc.createOffer());await waitIce(pc);offerSdp=pc.localDescription.sdp;
+  $("offer").value=b64e({t:"offer",sdp:offerSdp});setSt("menunggu jawaban");log("Kode undangan manual siap")}catch(e){log("Error: "+e.message)}};
+$("join").onclick=async()=>{try{const o=b64d($("offIn").value);if(o.t!=="offer")throw new Error("bukan kode undangan");
+  endSession();mkPC();pc.ondatachannel=e=>wire(e.channel);offerSdp=o.sdp;await pc.setRemoteDescription({type:"offer",sdp:o.sdp});
+  await pc.setLocalDescription(await pc.createAnswer());await waitIce(pc);answerSdp=pc.localDescription.sdp;
+  $("answer").value=b64e({t:"answer",sdp:answerSdp});setSt("kirim jawaban ke A");showSas()}catch(e){log("Error: "+e.message)}};
+$("fin").onclick=async()=>{try{const a=b64d($("ansIn").value);if(a.t!=="answer")throw new Error("bukan kode jawaban");
+  answerSdp=a.sdp;await pc.setRemoteDescription({type:"answer",sdp:a.sdp});setSt("menyambung…");showSas()}catch(e){log("Error: "+e.message)}};
+document.querySelectorAll("[data-copy]").forEach(b=>b.onclick=async()=>{const el=$(b.dataset.copy);el.select();try{await navigator.clipboard.writeText(el.value);log("Disalin")}catch(e){document.execCommand("copy")}});
+
+/* ---------- Berkas ---------- */
+$("exp").onclick=()=>{
+  const blob=new Blob([JSON.stringify({app:"synctest",v:2,books:S.books})],{type:"application/json"});
+  const a=document.createElement("a");a.href=URL.createObjectURL(blob);a.download="perpustakaan-"+S.dev.slice(0,4)+".json";a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href),2000);log("Ekspor selesai");
+};
+$("imp").onchange=async e=>{
+  const f=e.target.files[0];if(!f)return;
+  try{const j=JSON.parse(await f.text());if(!j.books)throw new Error("format tidak dikenal");
+    const r=merge(S.books,j.books);S.books=r.books;S.clock=Math.max(S.clock,r.maxT);save();render();
+    log("Impor "+f.name+": "+(r.changed?"digabung":"tidak ada yang lebih baru"));sendAll("impor")}
+  catch(err){log("Impor gagal: "+err.message)}
+  e.target.value="";
+};
+
+/* ---------- Uji otomatis ---------- */
+$("self").onclick=async()=>{
+  const out=$("selfOut");out.innerHTML="";
+  const T=(n,ok)=>{const li=document.createElement("li");li.textContent=(ok?"✔ ":"✘ ")+n;li.style.color=ok?"var(--acc)":"var(--bad)";out.appendChild(li)};
+  const A={x:{title:"X",pr:10,t:100,by:"a"}},B={x:{title:"X",pr:50,t:200,by:"b"}};
+  T("yang lebih baru menang",merge(A,B).books.x.pr===50&&merge(B,A).books.x.pr===50);
+  const ab=merge(A,B).books,ba=merge(B,A).books;
+  T("urutan gabung tidak berpengaruh",JSON.stringify(ab)===JSON.stringify(ba));
+  T("gabung dua kali tidak mengubah apa-apa",!merge(ab,B).changed&&!merge(ab,A).changed);
+  const D={x:{title:"X",pr:10,t:300,by:"a",del:true}},E={x:{title:"X",pr:90,t:400,by:"b"}};
+  T("hapus baru mengalahkan ubah lama",merge(B,D).books.x.del===true);
+  T("ubah baru mengalahkan hapus lama",!merge(D,E).books.x.del);
+  const C1={x:{title:"X",pr:1,t:500,by:"a"}},C2={x:{title:"X",pr:2,t:500,by:"b"}};
+  T("waktu sama: hasil sama di dua sisi",JSON.stringify(merge(C1,C2).books)===JSON.stringify(merge(C2,C1).books));
+  T("buku berbeda digabung semua",Object.keys(merge({p:{title:"P",pr:1,t:1,by:"a"}},{q:{title:"Q",pr:2,t:2,by:"b"}}).books).length===2);
+  try{
+    const s=L.newSecret(),k=await L.keysFor(s),k2=await L.keysFor(L.newSecret());
+    const sealed=await L.seal({a:1,sdp:"x".repeat(2000)},k.key);
+    T("sandi pesan relay bolak-balik",(await L.open(sealed,k.key)).a===1);
+    let bad=false;try{await L.open(sealed,k2.key)}catch(e){bad=true}
+    T("kunci salah ditolak",bad);
+    T("kode pairing 16 karakter",s.length===16);
+  }catch(e){T("sandi/kunci: "+e.message,false)}
+  T("pembuat QR bekerja",!!L.qr("https://example.com/#p=ABCDEFGH23456789"));
+  T("WebRTC didukung",typeof RTCPeerConnection==="function");
+  T("EventSource didukung",typeof EventSource==="function");
+  T("pemindai QR bawaan: "+("BarcodeDetector" in window?"ada":"tidak ada (akan memakai jsQR)"),true);
+  T("kompresi: "+(typeof CompressionStream!=="undefined"?"ada":"tidak ada (pesan lebih besar)"),true);
+  T("HTTPS atau localhost",window.isSecureContext);
+  try{localStorage.setItem("synctest.p","1");localStorage.removeItem("synctest.p");T("penyimpanan lokal bisa ditulis",true)}catch(e){T("penyimpanan lokal bisa ditulis",false)}
+  if(navigator.storage&&navigator.storage.persisted)T("penyimpanan persisten: "+(await navigator.storage.persisted()?"ya":"belum"),true);
+};
+
+render();
+log("Siap. ID perangkat "+S.dev);
+// Dibuka dari QR (kamera HP): #p=KODE
+const h=/#p=([A-Za-z0-9]+)/.exec(location.hash);
+if(h){history.replaceState(null,"",location.pathname+location.search);log("Dibuka dari QR, menyambung otomatis");joinWith(h[1])}
+})();
+</script>
+</body>
+</html>
